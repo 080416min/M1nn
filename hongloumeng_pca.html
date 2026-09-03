@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>红楼梦 — 3D PCA of Chapter Word Frequencies</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+         background: #14161a; color: #e8e8e8; display: flex; flex-wrap: wrap; }
+  #viewer { position: relative; flex: 1 1 640px; min-width: 480px; height: 100vh; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  canvas:active { cursor: grabbing; }
+  #hud { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,.55);
+         padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+  #hud b { color: #ff6b6b; } #hud span.b { color: #6ba8ff; }
+  #legend { position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,.55);
+            padding: 8px 12px; border-radius: 8px; font-size: 13px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  #tooltip { position: absolute; pointer-events: none; background: rgba(0,0,0,.85);
+             border: 1px solid #444; border-radius: 6px; padding: 6px 10px; font-size: 12px;
+             display: none; max-width: 320px; z-index: 5; }
+  #panel { flex: 0 0 380px; max-width: 420px; height: 100vh; overflow-y: auto;
+           padding: 18px 20px; background: #1c1f26; border-left: 1px solid #2b2f38; }
+  #panel h1 { font-size: 17px; margin: 4px 0 2px; }
+  #panel h2 { font-size: 14px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #333; }
+  #panel h3 { font-size: 13px; margin: 12px 0 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  ul { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+  li { display: flex; justify-content: space-between; padding: 2px 4px; border-radius: 4px; }
+  li:nth-child(odd) { background: rgba(255,255,255,.04); }
+  .pos li .w { color: #7ddc8a; } .neg li .w { color: #ff8b8b; }
+  .v { color: #9aa3b2; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div id="viewer">
+  <canvas id="c"></canvas>
+  <div id="hud"><b>Drag</b> rotate &nbsp;·&nbsp; <span class="b">Wheel</span> zoom &nbsp;·&nbsp;
+       <b>Shift+drag</b> pan &nbsp;·&nbsp; hover a point for its chapter</div>
+  <div id="legend">
+    <div><span class="dot" style="background:#e03131"></span>Chapters 1–80 (first 80)</div>
+    <div><span class="dot" style="background:#339af0"></span>Chapters 81–120 (last 40)</div>
+  </div>
+  <div id="tooltip"></div>
+</div>
+<div id="panel">
+  <h1>红楼梦 — PCA of chapter word frequencies</h1>
+  <div style="font-size:12px;color:#9aa3b2">300 most common words · z-scored · PCA to 3D ·
+    PC1 <span id="ev1"></span>% · PC2 <span id="ev2"></span>% · PC3 <span id="ev3"></span>% of variance</div>
+
+  <h2>Chapters 1–80 (first 80)</h2>
+  <h3>Top 20 positive features (overrepresented)</h3>
+  <div class="grid"><ul class="pos" id="f80pos1"></ul><ul class="pos" id="f80pos2"></ul></div>
+  <h3>Top 20 negative features (underrepresented)</h3>
+  <div class="grid"><ul class="neg" id="f80neg1"></ul><ul class="neg" id="f80neg2"></ul></div>
+
+  <h2>Chapters 81–120 (last 40)</h2>
+  <h3>Top 20 positive features (overrepresented)</h3>
+  <div class="grid"><ul class="pos" id="f40pos1"></ul><ul class="pos" id="f40pos2"></ul></div>
+  <h3>Top 20 negative features (underrepresented)</h3>
+  <div class="grid"><ul class="neg" id="f40neg1"></ul><ul class="neg" id="f40neg2"></ul></div>
+</div>
+<script>
+const DATA = {"coords": [[12.52, 15.742, 8.1291], [11.3743, 10.1079, 0.9535], [5.2184, 0.5871, 0.6201], [8.4806, 9.8286, -1.842], [8.385, 4.5601, 6.5079], [2.0616, 0.1659, -1.681], [1.438, -1.3067, -2.0237], [2.1346, -2.8556, 3.1002], [4.52, 1.1587, 1.8302], [-2.5302, 2.2889, -6.6982], [-3.3531, 0.8926, -5.304], [6.0583, 4.7963, 2.8213], [7.0674, 4.2762, -2.4045], [4.9659, 1.3823, -4.4276], [3.7918, 1.056, 0.0509], [3.0286, 3.0814, -3.7606], [8.6832, 4.656, 1.6962], [7.486, 3.1238, 0.8029], [2.0011, -2.1514, 2.3813], [1.2816, -5.7041, 3.5392], [1.831, -2.7959, 3.5078], [2.4052, -2.2965, 2.2821], [2.5157, -0.0536, 2.5875], [1.0977, -1.8269, 1.5147], [2.8337, -2.1094, 2.7626], [-0.918, -3.6867, 5.6959], [0.679, -4.6749, 2.5355], [1.0052, -5.0556, 5.3363], [1.8156, -3.3781, 0.3696], [1.7397, -5.1618, 6.236], [-0.4341, -5.4702, 4.7287], [-0.7962, -5.787, 6.6306], [3.4302, 2.0692, 4.6547], [0.3174, -3.0058, 4.2598], [1.1724, -5.5541, 2.5283], [1.2635, -3.5906, 1.9785], [3.0275, -4.1386, -1.0857], [1.7508, -4.616, -1.8141], [-0.9642, -2.5504, -3.264], [1.0293, -4.8468, -3.6196], [3.7028, -4.0437, 0.4698], [1.2195, -4.9663, -3.3211], [0.3861, -2.2558, -2.9874], [0.2036, -5.3594, -3.5833], [-1.3485, -4.7206, -3.9675], [-1.6111, -1.693, -3.97], [1.0146, -0.6764, -1.8044], [1.5112, -1.132, 0.0323], [3.1157, -3.0094, -0.4616], [2.5587, -3.3446, -0.7683], [2.7438, -4.8739, -1.7605], [1.7018, -5.7809, -0.8644], [3.5555, 1.7186, -6.4444], [2.6582, -3.1354, -4.5125], [1.0615, -2.8551, -4.2265], [2.4699, -3.2799, -5.2457], [1.7689, -2.2562, 0.8291], [3.5681, -0.3626, -1.3529], [2.7802, -4.8006, -0.3963], [2.746, -3.5195, -1.0534], [0.8512, -4.6191, -4.4361], [1.8912, -4.1091, -1.0349], [3.0336, -2.3816, -1.2834], [0.7654, 5.5383, -0.1846], [2.3213, 0.4078, -3.0424], [3.5705, 4.6437, -1.4086], [-5.465, -0.7103, 1.4919], [2.772, 2.5298, -5.8753], [2.6424, 3.8637, -3.9463], [5.6159, -2.9561, 0.4711], [2.471, -1.7155, -3.9502], [1.459, -1.7952, -3.8129], [3.9007, -0.9446, -2.9639], [2.6706, -1.2983, -2.5432], [3.9053, 0.6927, -4.1442], [4.7706, 0.5272, -1.2673], [3.1502, -1.6901, -1.0141], [5.4297, 0.814, 1.0435], [5.3823, 3.4593, 1.3885], [3.1984, -0.3012, -1.3589], [-4.064, 0.0862, 1.5035], [-3.9466, -2.1834, 4.5705], [-4.7109, -0.7716, 0.2671], [-4.2445, 0.5301, -0.1177], [-4.4455, -0.2088, 2.6336], [-6.738, 1.1386, 2.6328], [-2.9838, -0.8305, 6.042], [-6.0408, -0.71, -0.5699], [-4.5485, -1.7821, 6.731], [-5.4679, -0.0839, 2.5577], [-4.1425, 1.9707, 2.417], [-7.0846, 0.0557, -0.7085], [-6.6051, 4.0286, -0.8573], [-6.0311, -0.5085, -1.749], [-4.4499, 3.5032, 1.6128], [-6.2503, 1.7917, 4.0123], [-4.4353, 1.1258, 3.3237], [-3.6425, 2.2694, 4.5216], [-7.713, 3.5024, -1.1864], [-6.2685, 1.4405, 1.1246], [-3.4742, -1.8431, 2.1562], [-4.5321, 5.6795, -1.762], [-6.6131, 0.9913, -0.9063], [-5.8861, 3.6902, 0.3801], [-8.317, 5.8376, -3.7104], [-5.6247, 6.4356, -3.3988], [-4.5795, 6.1901, -3.6538], [-4.2337, -0.5843, -0.4017], [-4.9765, -0.4181, 2.4514], [-6.6165, 2.4626, -4.1908], [-5.1509, 1.5787, -2.2075], [-7.2173, 3.2848, -2.5972], [-4.8165, 0.163, 0.9628], [-6.6317, 4.3405, -1.0777], [-4.8729, 2.6609, 0.5397], [-3.3003, 4.9093, 6.0564], [-5.6364, 2.71, -0.4572], [-4.9742, 2.386, 2.1743], [-5.9678, 3.8371, -0.4817], [-2.3229, 4.559, 2.5064]], "titles": ["第一回　甄士隐梦幻识通灵　贾雨村风尘怀闺秀", "第二回　贾夫人仙逝扬州城　冷子兴演说荣国府", "第三回　贾雨村夤缘复旧职　林黛玉抛父进京都", "第四回　薄命女偏逢薄命郎　葫芦僧乱判葫芦案", "第五回　游幻境指迷十二钗　饮仙醪曲演红楼梦", "第六回　贾宝玉初试云雨情　刘姥姥一进荣国府", "第七回　送宫花贾琏戏熙凤　宴宁府宝玉会秦钟", "第八回　比通灵金莺微露意　探宝钗黛玉半含酸", "第九回　恋风流情友入家塾　起嫌疑顽童闹学堂", "第十回　金寡妇贪利权受辱　张太医论病细穷源", "第十一回　庆寿辰宁府排家宴　见熙凤贾瑞起淫心", "第十二回　王熙凤毒设相思局　贾天祥正照风月鉴", "第十三回　秦可卿死封龙禁尉　王熙凤协理宁国府", "第十四回　林如海捐馆扬州城　贾宝玉路谒北静王", "第十五回　王凤姐弄权铁槛寺　秦鲸卿得趣馒头庵", "第十六回　贾元春才选凤藻宫　秦鲸卿夭逝黄泉路", "第十七回　大观园试才题对额　荣国府归省庆元宵", "第十八回　大观园试才题对额　荣国府归省庆元宵", "第十九回　情切切良宵花解语　意绵绵静日玉生香", "第二十回　王熙凤正言弹妒意　林黛玉俏语谑娇音", "第二十一回　贤袭人娇嗔箴宝玉　俏平儿软语救贾琏", "第二十二回　听曲文宝玉悟禅机　制灯迷贾政悲谶语", "第二十三回　西厢记妙词通戏语　牡丹亭艳曲警芳心", "第二十四回　醉金刚轻财尚义侠　痴女儿遗帕惹相思", "第二十五回　魇魔法姊弟逢五鬼　红楼梦通灵遇双真", "第二十六回　蜂腰桥设言传心事　潇湘馆春困发幽情", "第二十七回　滴翠亭杨妃戏彩蝶　埋香冢飞燕泣残红", "第二十八回　蒋玉菡情赠茜香罗　薛宝钗羞笼红麝串", "第二十九回　享福人福深还祷福　痴情女情重愈斟情", "第三十回　宝钗借扇机带双敲　龄官划蔷痴及局外", "第三十一回　撕扇子作千金一笑　因麒麟伏白首双星", "第三十二回　诉肺腑心迷活宝玉　含耻辱情烈死金钏", "第三十三回　手足耽耽小动唇舌　不肖种种大承笞挞", "第三十四回　情中情因情感妹妹　错里错以错劝哥哥", "第三十五回　白玉钏亲尝莲叶羹　黄金莺巧结梅花络", "第三十六回　绣鸳鸯梦兆绛芸轩　识分定情悟梨香院", "第三十七回　秋爽斋偶结海棠社　蘅芜苑夜拟菊花题", "第三十八回　林潇湘魁夺菊花诗　薛蘅芜讽和螃蟹咏", "第三十九回　村姥姥是信口开合　情哥哥偏寻根究底", "第四十回　史太君两宴大观园　金鸳鸯三宣牙牌令", "第四十一回　栊翠庵茶品梅花雪　怡红院劫遇母蝗虫", "第四十二回　蘅芜君兰言解疑癖　潇湘子雅谑补余香", "第四十三回　闲取乐偶攒金庆寿　不了情暂撮土为香", "第四十四回　变生不测凤姐泼醋　喜出望外平儿理妆", "第四十五回　金兰契互剖金兰语　风雨夕闷制风雨词", "第四十六回　尴尬人难免尴尬事　鸳鸯女誓绝鸳鸯偶", "第四十七回　呆霸王调情遭苦打　冷郎君惧祸走他乡", "第四十八回　情人情误思游艺慕　雅女雅集苦吟诗", "第四十九回　琉璃世界白雪红梅　脂粉香娃割腥啖膻", "第五十回　芦雪庵争联即景诗　暖香坞雅制春灯谜", "第五十一回　薛小妹新编怀古诗　胡庸医乱用虎狼药", "第五十二回　俏平儿情掩虾须镯　勇晴雯病补雀金裘", "第五十三回　宁国府除夕祭宗祠　荣国府元宵开夜宴", "第五十四回　史太君破陈腐旧套　王熙凤效戏彩斑衣", "第五十五回　辱亲女愚妾争闲气　欺幼主刁奴蓄险心", "第五十六回　敏探春兴利除宿弊　时宝钗小惠全大体", "第五十七回　慧紫鹃情辞试忙玉　慈姨妈爱语慰痴颦", "第五十八回　杏子阴假凤泣虚凰　茜纱窗真情揆痴理", "第五十九回　柳叶渚边嗔莺咤燕　绛云轩里召将飞符", "第六十回　茉莉粉替去蔷薇硝　玫瑰露引来茯苓霜", "第六十一回　投鼠忌器宝玉瞒赃　判冤决狱平儿行权", "第六十二回　憨湘云醉眠芍药裀　呆香菱情解石榴裙", "第六十三回　寿怡红群芳开夜宴　死金丹独艳理亲丧", "第六十四回　幽淑女悲题五美吟　浪荡子情遗九龙珮", "第六十五回　贾二舍偷娶尤二姨　尤三姐思嫁柳二郎", "第六十六回　情小妹耻情归地府　冷二郎一冷入空门", "第六十七回　见土仪颦卿思故里　闻秘事凤姐讯家童", "第六十八回　苦尤娘赚入大观园　酸凤姐大闹宁国府", "第六十九回　弄小巧用借剑杀人　觉大限吞生金自逝", "第七十回　林黛玉重建桃花社　史湘云偶填柳絮词", "第七十一回　嫌隙人有心生嫌隙　鸳鸯女无意遇鸳鸯", "第七十二回　王熙凤恃强羞说病　来旺妇倚势霸成亲", "第七十三回　痴丫头误拾绣春囊　懦小姐不问累金凤", "第七十四回　惑奸谗抄检大观园　矢孤介杜绝宁国府", "第七十五回　开夜宴异兆发悲音　赏中秋新词得佳谶", "第七十六回　凸碧堂品笛感凄清　凹晶馆联诗悲寂寞", "第七十七回　俏丫鬟抱屈夭风流　美优伶斩情归水月", "第七十八回　老学士闲征姽婳词　痴公子杜撰芙蓉诔", "第七十九回　薛文龙悔娶河东狮　贾迎春误嫁中山狼", "第八十回　美香菱屈受贪夫棒　王道士胡诌妒妇方", "第八十一回　占旺相四美钓游鱼　奉严词两番入家塾", "第八十二回　老学究讲义警顽心　病潇湘痴魂惊恶梦", "第八十三回　省宫闱贾元妃染恙　闹闺阃薛宝钗吞声", "第八十四回　试文字宝玉始提亲　探惊风贾环重结怨", "第八十五回　贾存周报升郎中任　薛文起复惹放流刑", "第八十六回　受私贿老官翻案牍　寄闲情淑女解琴书", "第八十七回　感深秋抚琴悲往事　坐禅寂走火入邪魔", "第八十八回　博庭欢宝玉赞孤儿　正家法贾珍鞭悍仆", "第八十九回　人亡物在公子填词　蛇影杯弓颦卿绝粒", "第九十回　失绵衣贫女耐嗷嘈　送果品小郎惊叵测", "第九十一回　纵淫心宝蟾工设计　布疑阵宝玉妄谈禅", "第九十二回　评女传巧姐慕贤良　玩母珠贾政参聚散", "第九十三回　甄家仆投靠贾家门　水月庵掀翻风月案", "第九十四回　宴海棠贾母赏花妖　失宝玉通灵知奇祸", "第九十五回　因讹成实元妃薨逝　以假混真宝玉疯颠", "第九十六回　瞒消息凤姐设奇谋　泄机关颦儿迷本性", "第九十七回　林黛玉焚稿断痴情　薛宝钗出闺成大礼", "第九十八回　苦绛珠魂归离恨天　病神瑛泪洒相思地", "第九十九回　守官箴恶奴同破例　阅邸报老舅自担惊", "第一百回　破好事香菱结深恨　悲远嫁宝玉感离情", "第一百一回　大观园月夜感幽魂　散花寺神签惊异兆", "第一百二回　宁国府骨肉病灾祲　大观园符水驱妖孽", "第一百三回　施毒计金桂自焚身　昧真禅雨村空遇旧", "第一百四回　醉金刚小鳅生大浪　痴公子余痛触前情", "第一百五回　锦衣军查抄宁国府　骢马使弹劾平安州", "第一百六回　王熙凤致祸抱羞惭　贾太君祷天消祸患", "第一百七回　散余资贾母明大义　复世职政老沐天恩", "第一百八回　强欢笑蘅芜庆生辰　死缠绵潇湘闻鬼哭", "第一百九回　候芳魂五儿承错爱　还孽债迎女返真元", "第一百十回　史太君寿终归地府　王凤姐力诎失人心", "第一百十一回　鸳鸯女殉主登太虚　狗彘奴欺天招伙盗", "第一百十二回　活冤孽妙尼遭大劫　死雠仇赵妾赴冥曹", "第一百十三回　忏宿冤凤姐托村妪　释旧憾情婢感痴郎", "第一百十四回　王熙凤历幻返金陵　甄应嘉蒙恩还玉阙", "第一百十五回　惑偏私惜春矢素志　证同类宝玉失相知", "第一百十六回　得通灵幻境悟仙缘　送慈柩故乡全孝道", "第一百十七回　阻超凡佳人双护玉　欣聚党恶子独承家", "第一百十八回　记微嫌舅兄欺弱女　惊谜语妻妾谏痴人", "第一百十九回　中乡魁宝玉却尘缘　沐皇恩贾家延世泽", "第一百二十回　甄士隐详说太虚情　贾雨村归结红楼梦"], "ev": [6.6, 4.6, 3.4], "features": {"first80": {"positive": [["听说", 0.348], ["一面", 0.324], ["罢了", 0.318], ["不过", 0.314], ["如此", 0.312], ["谁知", 0.308], ["丫鬟", 0.299], ["不成", 0.299], ["素日", 0.297], ["二人", 0.291], ["如何", 0.288], ["因此", 0.283], ["不曾", 0.274], ["十分", 0.273], ["这会子", 0.269], ["难道", 0.262], ["不如", 0.261], ["越发", 0.257], ["原来", 0.252], ["姊妹", 0.251]], "negative": [["没有", -0.475], ["听见", -0.43], ["时候", -0.42], ["言语", -0.403], ["一天", -0.386], ["心里", -0.38], ["过来", -0.368], ["的话", -0.347], ["里头", -0.34], ["好些", -0.339], ["已经", -0.317], ["想起", -0.314], ["外头", -0.309], ["跟着", -0.285], ["为什么", -0.276], ["怎么样", -0.267], ["老爷", -0.261], ["正在", -0.259], ["紫鹃", -0.256], ["家人", -0.251]]}, "last40": {"positive": [["没有", 0.949], ["听见", 0.86], ["时候", 0.841], ["言语", 0.807], ["一天", 0.772], ["心里", 0.76], ["过来", 0.736], ["的话", 0.694], ["里头", 0.68], ["好些", 0.678], ["已经", 0.635], ["想起", 0.628], ["外头", 0.617], ["跟着", 0.569], ["为什么", 0.552], ["怎么样", 0.534], ["老爷", 0.522], ["正在", 0.519], ["紫鹃", 0.512], ["家人", 0.501]], "negative": [["听说", -0.695], ["一面", -0.648], ["罢了", -0.636], ["不过", -0.628], ["如此", -0.624], ["谁知", -0.617], ["丫鬟", -0.598], ["不成", -0.597], ["素日", -0.593], ["二人", -0.582], ["如何", -0.576], ["因此", -0.566], ["不曾", -0.549], ["十分", -0.546], ["这会子", -0.537], ["难道", -0.523], ["不如", -0.523], ["越发", -0.514], ["原来", -0.505], ["姊妹", -0.502]]}}};
+
+function fillList(id, items) {
+  const ul = document.getElementById(id);
+  items.forEach(([w, v]) => {
+    const li = document.createElement("li");
+    const s = document.createElement("span"); s.className = "w"; s.textContent = w;
+    const n = document.createElement("span"); n.className = "v"; n.textContent = v.toFixed(2);
+    li.append(s, n); ul.appendChild(li);
+  });
+}
+["f80pos","f80neg","f40pos","f40neg"].forEach(base => {
+  const feats = DATA.features[base];
+  const half = Math.ceil(feats.length / 2);
+  fillList(base + "1", feats.slice(0, half));
+  fillList(base + "2", feats.slice(half));
+});
+DATA.ev.forEach((e, i) => document.getElementById("ev" + (i + 1)).textContent = e.toFixed(1));
+
+// ---------- minimal 3D orbit viewer ----------
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const tip = document.getElementById("tooltip");
+const pts = DATA.coords.map((c, i) => ({ x: c[0], y: c[1], z: c[2], n: i + 1, t: DATA.titles[i] }));
+
+let yaw = 0.6, pitch = 0.35, dist = 3.2, panX = 0, panY = 0;
+const near = [], far = [];   // scratch arrays
+function center() {
+  let mx = 0, my = 0, mz = 0;
+  for (const p of pts) { mx += p.x; my += p.y; mz += p.z; }
+  mx /= pts.length; my /= pts.length; mz /= pts.length;
+  let r = 0;
+  for (const p of pts) { p.x -= mx; p.y -= my; p.z -= mz; r = Math.max(r, p.x*p.x + p.y*p.y + p.z*p.z); }
+  return Math.sqrt(r);
+}
+const radius = center();
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.clientWidth * dpr;
+  canvas.height = canvas.clientHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+window.addEventListener("resize", resize);
+
+function project(p) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const x1 = p.x * cy - p.z * sy;
+  const z1 = p.x * sy + p.z * cy;
+  const y2 = p.y * cp - z1 * sp;
+  const z2 = p.y * sp + z1 * cp;
+  const zc = z2 + dist * radius;
+  const f = (canvas.clientHeight * 0.5) / (zc * 0.9);
+  return { sx: canvas.clientWidth / 2 + x1 * f + panX, sy: canvas.clientHeight / 2 - y2 * f + panY, z: zc, f };
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+  // axes
+  const o = project({ x: 0, y: 0, z: 0 });
+  const L = radius * 1.15;
+  const axes = [["PC1", { x: L, y: 0, z: 0 }, "#888"], ["PC2", { x: 0, y: L, z: 0 }, "#888"], ["PC3", { x: 0, y: 0, z: L }, "#888"]];
+  ctx.font = "12px sans-serif";
+  for (const [name, end, col] of axes) {
+    const e = project(end);
+    ctx.strokeStyle = col; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(o.sx, o.sy); ctx.lineTo(e.sx, e.sy); ctx.stroke();
+    ctx.fillStyle = "#aaa"; ctx.fillText(name, e.sx + 4, e.sy);
+  }
+  // points sorted back-to-front
+  const order = pts.map((p, i) => ({ i, pr: project(p) })).sort((a, b) => b.pr.z - a.pr.z);
+  for (const { i, pr } of order) {
+    const isRed = pts[i].n <= 80;
+    const r = Math.max(2.5, Math.min(7, pr.f * radius * 0.02));
+    ctx.beginPath();
+    ctx.arc(pr.sx, pr.sy, r, 0, Math.PI * 2);
+    ctx.fillStyle = isRed ? "rgba(224,49,49,0.85)" : "rgba(51,154,240,0.85)";
+    ctx.fill();
+    if (pts[i].n === 1 || pts[i].n === 80 || pts[i].n === 81 || pts[i].n === 120) {
+      ctx.fillStyle = "#ddd"; ctx.fillText(String(pts[i].n), pr.sx + 6, pr.sy - 6);
+    }
+  }
+}
+
+let dragging = false, shifted = false, lastX = 0, lastY = 0;
+canvas.addEventListener("pointerdown", e => {
+  dragging = true; shifted = e.shiftKey || e.button === 2;
+  lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", e => {
+  if (dragging) {
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    if (shifted) { panX += dx; panY += dy; }
+    else { yaw -= dx * 0.008; pitch = Math.max(-1.5, Math.min(1.5, pitch + dy * 0.008)); }
+    draw();
+  } else {
+    const mx = e.offsetX, my = e.offsetY;
+    let hit = null;
+    for (const p of pts) {
+      const pr = project(p);
+      if ((pr.sx - mx) ** 2 + (pr.sy - my) ** 2 < 100) { if (!hit || pr.z < hit.z) hit = pr, hitP = p; }
+    }
+    if (hit) {
+      tip.style.display = "block";
+      tip.style.left = (mx + 14) + "px"; tip.style.top = (my + 14) + "px";
+      tip.innerHTML = "<b>Chapter " + hitP.n + "</b><br>" + hitP.t;
+    } else tip.style.display = "none";
+  }
+});
+canvas.addEventListener("pointerup", () => dragging = false);
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  dist = Math.max(1.2, Math.min(20, dist * (e.deltaY > 0 ? 1.1 : 0.9)));
+  draw();
+}, { passive: false });
+
+resize();
+</script>
+</body>
+</html>
